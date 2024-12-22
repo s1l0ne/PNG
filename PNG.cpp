@@ -7,6 +7,7 @@ inline void PNG::read_bytes(uint32_t cnt, uint8_t* to) {
 	}
 }
 
+
 void PNG::get_chunck_info(uint8_t* len, uint8_t* type) {
 	read_bytes(4, len);
 	read_bytes(4, type);
@@ -20,9 +21,18 @@ void PNG::plte_chunck(const uint32_t len) {
 		plte[i].g = fgetc(png);
 		plte[i].b = fgetc(png);
 	}
+}
 
+
+void PNG::idat_chunck(const uint32_t len) {
 
 }
+
+
+void PNG::iend_chunck(const uint32_t len) {
+
+}
+
 
 
 PNG::PNG(FILE* png) : png(png), plte(nullptr) {
@@ -67,14 +77,21 @@ PNG::PNG(FILE* png) : png(png), plte(nullptr) {
 	while (true) {
 		get_chunck_info(reinterpret_cast<uint8_t*>(&len), reinterpret_cast<uint8_t*>(&type));
 
-		if (type == *reinterpret_cast<uint32_t*>("PLTE")) {
+		if (type == *reinterpret_cast<uint32_t*>(const_cast<char*>("PLTE"))) {
 			plte_chunck(len);
 		}
-		else if (type == *reinterpret_cast<uint32_t*>("IDAT")) {
+		else if (type == *reinterpret_cast<uint32_t*>(const_cast<char*>("IDAT"))) {
 			idat_chunck(len);
 		}
-		else if (type == *reinterpret_cast<uint32_t*>("IEND")) {
-			iend_chunck;
+		else if (type == *reinterpret_cast<uint32_t*>(const_cast<char*>("IEND"))) {
+			break;
 		}
+	}
+}
+
+
+PNG::~PNG() {
+	if (plte != nullptr) {
+		delete[] plte;
 	}
 }

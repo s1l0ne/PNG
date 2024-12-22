@@ -12,7 +12,7 @@ endif()
 project ("PNG")
 
 # Добавьте источник в исполняемый файл этого проекта.
-add_executable (PNG "PNG.cpp" "PNG.h")
+add_executable (PNG "PNG.cpp" "PNG.h" "main.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET PNG PROPERTY CXX_STANDARD 20)

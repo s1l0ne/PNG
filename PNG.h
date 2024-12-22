@@ -35,4 +35,5 @@ class PNG {
 
 public:
 	PNG(FILE* png);
+	~PNG();
 };
