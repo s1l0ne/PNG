@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <iostream>
+#include "CRC.h"
 
 
 class PNG {
@@ -9,6 +10,10 @@ class PNG {
 		uint8_t r;
 		uint8_t g;
 		uint8_t b;
+	};
+
+	struct RGBA : public RGB {
+		uint8_t a;
 	};
 
 	struct IHDR {
@@ -21,17 +26,27 @@ class PNG {
 		uint8_t interlace;
 	};
 
+	struct chunck {
+		uint32_t len = 0;
+		uint32_t* type = nullptr;
+		uint8_t* data = nullptr;
+	} curr_chunck;
+
 	IHDR ihdr;
 	RGB* plte;
 
 	uint8_t** picture;
 
-	void get_chunck_info(uint8_t* len, uint8_t* type);
-	void read_bytes(uint32_t cnt, uint8_t* to);
+	uint32_t as_uint32(uint32_t uint) {
 
-	void plte_chunck(const uint32_t len);
-	void idat_chunck(const uint32_t len);
-	void iend_chunck(const uint32_t len);
+	}
+	void read_bytes(uint32_t cnt, uint8_t* to);
+	void get_chunck();
+
+	void ihdr_chunck();
+	void plte_chunck();
+	void idat_chunck();
+	void iend_chunck();
 
 public:
 	PNG(FILE* png);

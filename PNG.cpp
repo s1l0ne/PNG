@@ -1,4 +1,4 @@
-﻿#include "Png.h"
+﻿#include "PNG.h"
 
 
 inline void PNG::read_bytes(uint32_t cnt, uint8_t* to) {
@@ -7,35 +7,68 @@ inline void PNG::read_bytes(uint32_t cnt, uint8_t* to) {
 	}
 }
 
+inline void PNG::get_chunck() {
+	if (curr_chunck.type != nullptr) {
+		delete[] curr_chunck.type;
+	}
 
-void PNG::get_chunck_info(uint8_t* len, uint8_t* type) {
-	read_bytes(4, len);
-	read_bytes(4, type);
+	read_bytes(4, reinterpret_cast<uint8_t*>(&curr_chunck.len));
+
+	curr_chunck.data = new uint8_t[curr_chunck.len];
+	read_bytes(4 + curr_chunck.len, curr_chunck.data);
+	curr_chunck.type = reinterpret_cast<uint32_t*>(curr_chunck.data);
+	curr_chunck.data += 4;
+
+	// example : IHDR chunck
+	//	memory : I H D R _ _ _ _ _ _ _ _ _ _ 0 0 _
+	//			 ^		 ^
+	//			type    data
 }
 
 
-void PNG::plte_chunck(const uint32_t len) {
-	plte = new RGB[len / 3];
-	for (uint32_t i = 0; i < len / 3; i++) {
-		plte[i].r = fgetc(png);
-		plte[i].g = fgetc(png);
-		plte[i].b = fgetc(png);
+void PNG::ihdr_chunck() {
+	if (*curr_chunck.type != *reinterpret_cast<uint32_t*>(const_cast<char*>("IHDR"))) {
+		throw "Error: expected IHDR";
+	}
+
+	memcpy(reinterpret_cast<uint8_t*>(&ihdr.width), curr_chunck.data, 4);
+	memcpy(reinterpret_cast<uint8_t*>(&ihdr.height), curr_chunck.data + 4, 4);
+
+	ihdr.bit_depth = *(curr_chunck.data + 8);
+	ihdr.color_type = *(curr_chunck.data + 9);
+	if ((ihdr.compression_method = *(curr_chunck.data + 10)) != 0) {
+		throw "Wrong compression method. Expected: 0";
+	}
+	if ((ihdr.filter_method = *(curr_chunck.data + 11)) != 0) {
+		throw "Wrong filter method. Expected: 0";
+	}
+	ihdr.interlace = *(curr_chunck.data + 12);
+}
+
+
+void PNG::plte_chunck() {
+	plte = new RGB[curr_chunck.len / 3];
+	for (uint32_t i = 0; i < curr_chunck.len / 3; i++) {
+		plte[i].r = curr_chunck.data[i * 3];
+		plte[i].g = curr_chunck.data[i * 3 + 1];
+		plte[i].b = curr_chunck.data[i * 3 + 2];
 	}
 }
 
 
-void PNG::idat_chunck(const uint32_t len) {
-
+void PNG::idat_chunck() {
+	
 }
 
 
-void PNG::iend_chunck(const uint32_t len) {
+void PNG::iend_chunck() {
 
 }
 
 
 
 PNG::PNG(FILE* png) : png(png), plte(nullptr) {
+	CRC::make_table();
 	// Parse header
 	uint8_t header[8];
 	for (uint8_t i = 0; i < 8; i++) {
@@ -43,47 +76,28 @@ PNG::PNG(FILE* png) : png(png), plte(nullptr) {
 			throw "Wrong header";
 		}
 	}
-
-	if (*reinterpret_cast<uint64_t*>(header) != 0x89'504e47'0d0a'1a'0a) {
+	uint64_t check = *reinterpret_cast<uint64_t*>(header);
+	if (*reinterpret_cast<uint64_t*>(header) != 0x0a'1a'0a0d'474e50'89) {
 		throw "Wrong header";
 	}
 
 
 	// Parse IHDR chunck
-	uint32_t len = 0;
-	uint32_t type;
-	read_bytes(4, reinterpret_cast<uint8_t*>(len));
-
-	for (uint8_t i = 0; i < 4; i++) {
-		if ("IHDR"[i] != fgetc(png)) {
-			throw "Wrong IHDR";
-		}
-	}
-
-	read_bytes(4, reinterpret_cast<uint8_t*>(&ihdr.width));
-	read_bytes(4, reinterpret_cast<uint8_t*>(&ihdr.height));
-	ihdr.bit_depth = fgetc(png);
-	ihdr.color_type = fgetc(png);
-	if ((ihdr.compression_method = fgetc(png)) != 0) {
-		throw "Wrong compression method";
-	}
-	if ((ihdr.filter_method = fgetc(png)) != 0) {
-		throw "Wrong filter method";
-	}
-	ihdr.interlace = fgetc(png);
+	get_chunck();
+	ihdr_chunck();
 
 
 	// Parse other chuncks
 	while (true) {
-		get_chunck_info(reinterpret_cast<uint8_t*>(&len), reinterpret_cast<uint8_t*>(&type));
-
-		if (type == *reinterpret_cast<uint32_t*>(const_cast<char*>("PLTE"))) {
-			plte_chunck(len);
+		get_chunck();
+		
+		if (*curr_chunck.type == *reinterpret_cast<uint32_t*>(const_cast<char*>("PLTE"))) {
+			plte_chunck();
 		}
-		else if (type == *reinterpret_cast<uint32_t*>(const_cast<char*>("IDAT"))) {
-			idat_chunck(len);
+		else if (*curr_chunck.type == *reinterpret_cast<uint32_t*>(const_cast<char*>("IDAT"))) {
+			idat_chunck();
 		}
-		else if (type == *reinterpret_cast<uint32_t*>(const_cast<char*>("IEND"))) {
+		else if (*curr_chunck.type == *reinterpret_cast<uint32_t*>(const_cast<char*>("IEND"))) {
 			break;
 		}
 	}
@@ -91,7 +105,9 @@ PNG::PNG(FILE* png) : png(png), plte(nullptr) {
 
 
 PNG::~PNG() {
-	if (plte != nullptr) {
+	if (plte != nullptr)
 		delete[] plte;
-	}
+
+	if (curr_chunck.type != nullptr)
+		delete[] curr_chunck.type;
 }
